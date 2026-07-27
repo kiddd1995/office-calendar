@@ -11,6 +11,7 @@ import {
 } from 'date-fns'
 import { zhTW } from 'date-fns/locale'
 import type { ReactNode } from 'react'
+import { getTaiwanHoliday } from '../data/taiwanHolidays'
 
 interface MonthCalendarProps {
   month: Date
@@ -53,6 +54,10 @@ export function MonthCalendar({
         {days.map((date) => {
           const selected = isSameDay(date, selectedDate)
           const today = isToday(date)
+          const weekend = date.getDay() === 0 || date.getDay() === 6
+          const holiday = getTaiwanHoliday(format(date, 'yyyy-MM-dd'))
+          const dayLabel = getDayLabel?.(date)
+            ?? format(date, 'M 月 d 日 EEEE', { locale: zhTW })
           return (
             <button
               type="button"
@@ -61,16 +66,25 @@ export function MonthCalendar({
               className={[
                 'calendar-day',
                 !isSameMonth(date, month) ? 'outside-month' : '',
+                weekend ? 'weekend' : '',
+                holiday ? 'national-holiday' : '',
                 today ? 'today' : '',
                 selected ? 'selected' : '',
                 dayClassName?.(date) ?? '',
               ].join(' ')}
               onClick={() => onSelectDate(date)}
               aria-selected={selected}
-              aria-label={getDayLabel?.(date) ?? format(date, 'M 月 d 日 EEEE', { locale: zhTW })}
+              aria-label={`${dayLabel}${holiday ? `，國定假日：${holiday.name}` : ''}`}
             >
               <span className="day-number">{format(date, 'd')}</span>
-              <span className="day-content">{renderDay?.(date)}</span>
+              <span className="day-content">
+                {holiday && (
+                  <span className="holiday-tag" title={holiday.name}>
+                    {holiday.shortName ?? holiday.name}
+                  </span>
+                )}
+                {renderDay?.(date)}
+              </span>
             </button>
           )
         })}

@@ -29,6 +29,7 @@ import {
   getPublicEvents,
   getWeeklyHighlightEvents,
 } from '../utils/eventFilters'
+import { HolidayNotice } from './HolidayNotice'
 import { MonthCalendar } from './MonthCalendar'
 
 interface CourseCalendarProps {
@@ -170,6 +171,7 @@ export function CourseCalendar({ events }: CourseCalendarProps) {
           </div>
           <span className="count-badge">{selectedEvents.length} 場活動</span>
         </div>
+        <HolidayNotice date={format(selectedDate, 'yyyy-MM-dd')} />
         {selectedEvents.length ? (
           <div className="event-details">
             {selectedEvents.map((event) => {

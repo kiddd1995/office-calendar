@@ -25,6 +25,7 @@ import type {
   PaydayRecord,
   WorkMonthRecord,
 } from '../types/calendar'
+import { HolidayNotice } from './HolidayNotice'
 import { MonthCalendar } from './MonthCalendar'
 
 function formatDate(date: string) {
@@ -343,6 +344,7 @@ export function WorkCalendar() {
                 <h2>{format(selectedDate, 'M 月 d 日 EEEE', { locale: zhTW })}</h2>
               </div>
             </div>
+            <HolidayNotice date={dateKey} />
             {selectedPeriod || selectedPaydays.length ? (
               <>
                 <div className="work-highlight">

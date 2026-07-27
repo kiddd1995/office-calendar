@@ -156,7 +156,7 @@ function App() {
             href="https://kiddd1995.github.io/mobile-office/"
             aria-label="行動辦公室首頁"
           >
-            <span className="brand-mark"><Sparkles size={18} /></span>
+            <span className="brand-mark"><Sparkles size={20} /></span>
             <span>
               <strong>行動辦公室</strong>
               <small>Mobile Office Portal</small>
