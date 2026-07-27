@@ -10,9 +10,14 @@ export interface TaiwanHoliday {
  * 政府行政機關辦公日曆表」及其紀念日、節日連續假期一覽表。
  * https://www.dgpa.gov.tw/information?pid=12685&uid=30
  *
+ * 資料來源：行政院人事行政總處「中華民國 116 年（西元 2027 年）
+ * 政府行政機關辦公日曆表」及其紀念日、節日連續假期一覽表。
+ * https://www.dgpa.gov.tw/information?pid=12982&uid=41
+ *
  * 一般星期六、日由月曆既有週末樣式處理，不重複列入本資料。
  */
 export const taiwanHolidays: readonly TaiwanHoliday[] = [
+  // 2026（中華民國 115 年）
   {
     date: '2026-01-01',
     name: '中華民國開國紀念日（元旦）',
@@ -134,6 +139,140 @@ export const taiwanHolidays: readonly TaiwanHoliday[] = [
   {
     date: '2026-12-25',
     name: '行憲紀念日',
+    type: 'national-holiday',
+  },
+  // 2027（中華民國 116 年）
+  {
+    date: '2027-01-01',
+    name: '中華民國開國紀念日',
+    shortName: '元旦',
+    type: 'national-holiday',
+  },
+  {
+    date: '2027-02-04',
+    name: '除夕前一日',
+    shortName: '春節連假',
+    type: 'national-holiday',
+  },
+  {
+    date: '2027-02-05',
+    name: '農曆除夕',
+    shortName: '除夕',
+    type: 'national-holiday',
+  },
+  {
+    date: '2027-02-06',
+    name: '農曆春節',
+    shortName: '春節',
+    type: 'national-holiday',
+  },
+  {
+    date: '2027-02-07',
+    name: '農曆春節',
+    shortName: '春節',
+    type: 'national-holiday',
+  },
+  {
+    date: '2027-02-08',
+    name: '農曆春節',
+    shortName: '春節',
+    type: 'national-holiday',
+  },
+  {
+    date: '2027-02-09',
+    name: '農曆春節（農曆初一）補假',
+    shortName: '春節補假',
+    type: 'national-holiday',
+  },
+  {
+    date: '2027-02-10',
+    name: '農曆春節（農曆初二）補假',
+    shortName: '春節補假',
+    type: 'national-holiday',
+  },
+  {
+    date: '2027-02-28',
+    name: '和平紀念日',
+    shortName: '和平紀念日',
+    type: 'national-holiday',
+  },
+  {
+    date: '2027-03-01',
+    name: '和平紀念日補假',
+    shortName: '和平紀念日補假',
+    type: 'national-holiday',
+  },
+  {
+    date: '2027-04-04',
+    name: '兒童節',
+    type: 'national-holiday',
+  },
+  {
+    date: '2027-04-05',
+    name: '清明節',
+    type: 'national-holiday',
+  },
+  {
+    date: '2027-04-06',
+    name: '兒童節補假',
+    type: 'national-holiday',
+  },
+  {
+    date: '2027-04-30',
+    name: '勞動節補假',
+    type: 'national-holiday',
+  },
+  {
+    date: '2027-05-01',
+    name: '勞動節',
+    type: 'national-holiday',
+  },
+  {
+    date: '2027-06-09',
+    name: '端午節',
+    type: 'national-holiday',
+  },
+  {
+    date: '2027-09-15',
+    name: '中秋節',
+    type: 'national-holiday',
+  },
+  {
+    date: '2027-09-28',
+    name: '孔子誕辰紀念日／教師節',
+    shortName: '教師節',
+    type: 'national-holiday',
+  },
+  {
+    date: '2027-10-10',
+    name: '國慶日',
+    type: 'national-holiday',
+  },
+  {
+    date: '2027-10-11',
+    name: '國慶日補假',
+    type: 'national-holiday',
+  },
+  {
+    date: '2027-10-25',
+    name: '臺灣光復暨金門古寧頭大捷紀念日',
+    shortName: '光復節',
+    type: 'national-holiday',
+  },
+  {
+    date: '2027-12-24',
+    name: '行憲紀念日補假',
+    type: 'national-holiday',
+  },
+  {
+    date: '2027-12-25',
+    name: '行憲紀念日',
+    type: 'national-holiday',
+  },
+  {
+    date: '2027-12-31',
+    name: '117 年中華民國開國紀念日補假',
+    shortName: '元旦補假',
     type: 'national-holiday',
   },
 ]
