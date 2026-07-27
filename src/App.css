@@ -386,17 +386,10 @@ td:first-child { color: #254a68; white-space: nowrap; }
 .editor-form-grid input:not([type="checkbox"]):not([type="radio"]),.editor-form-grid select {
   height: 41px; padding: 0 11px;
 }
-.editor-form-grid .calculated-time-input {
-  color: #304a63;
-  background: #f4f9fd;
-  border-color: #cfdde9;
-  cursor: default;
-}
 .editor-form-grid textarea { min-height: 80px; padding: 10px 11px; resize: vertical; line-height: 1.55; }
 .editor-form-grid input[aria-invalid="true"],.editor-form-grid textarea[aria-invalid="true"] { border-color: #d36c72; background: #fffafb; }
 .span-two { grid-column: span 2; }
 .field-error { margin: 5px 0 0 2px; color: #b9474f; font-size: 9px; }
-.field-hint { margin: 5px 0 0 2px; color: #7b8fa2; font-size: 9px; }
 .category-select { position: relative; }
 .category-select summary {
   display: flex; align-items: center; gap: 9px; height: 41px; padding: 0 34px 0 11px;

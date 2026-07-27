@@ -63,10 +63,7 @@ const createEmptyDraft = (): EventDraft => ({
 
 function toDraft(event: CalendarEvent): EventDraft {
   const { id: _id, shortTitle: _shortTitle, ...draft } = event
-  return {
-    ...draft,
-    endTime: calculateEndTime(draft.startTime),
-  }
+  return draft
 }
 
 function isValidUrl(value: string) {
@@ -104,6 +101,7 @@ export function EventEditor({
 }: EventEditorProps) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draft, setDraft] = useState<EventDraft>(createEmptyDraft)
+  const [endTimeManuallyEdited, setEndTimeManuallyEdited] = useState(false)
   const [errors, setErrors] = useState<FormErrors>({})
   const [message, setMessage] = useState('')
   const [operationError, setOperationError] = useState('')
@@ -137,7 +135,9 @@ export function EventEditor({
     setDraft((current) => ({
       ...current,
       startTime,
-      endTime: calculateEndTime(startTime),
+      endTime: endTimeManuallyEdited
+        ? current.endTime
+        : calculateEndTime(startTime),
     }))
     setErrors((current) => ({
       ...current,
@@ -148,9 +148,15 @@ export function EventEditor({
     setOperationError('')
   }
 
+  const updateEndTime = (endTime: string) => {
+    setEndTimeManuallyEdited(true)
+    updateDraft('endTime', endTime)
+  }
+
   const startNew = () => {
     setEditingId(null)
     setDraft(createEmptyDraft())
+    setEndTimeManuallyEdited(false)
     setErrors({})
     setMessage('')
     setOperationError('')
@@ -160,6 +166,7 @@ export function EventEditor({
   const startEdit = (event: CalendarEvent) => {
     setEditingId(event.id)
     setDraft(toDraft(event))
+    setEndTimeManuallyEdited(false)
     setErrors({})
     setMessage('')
     setOperationError('')
@@ -169,6 +176,7 @@ export function EventEditor({
   const cancel = () => {
     setEditingId(null)
     setDraft(createEmptyDraft())
+    setEndTimeManuallyEdited(false)
     setErrors({})
     setMessage('')
     setOperationError('')
@@ -179,6 +187,7 @@ export function EventEditor({
     if (!draft.title.trim()) nextErrors.title = '請輸入活動名稱'
     if (!draft.date) nextErrors.date = '請選擇日期'
     if (!draft.startTime) nextErrors.startTime = '請選擇開始時間'
+    if (!draft.endTime) nextErrors.endTime = '請選擇結束時間'
     if (!draft.instructor.trim()) nextErrors.instructor = '請輸入講師'
     if (!draft.location.trim()) nextErrors.location = '請輸入地點'
     if (!isValidUrl(draft.registrationUrl ?? '')) {
@@ -197,7 +206,6 @@ export function EventEditor({
 
     const normalized: EventDraft = {
       ...draft,
-      endTime: calculateEndTime(draft.startTime),
       title: draft.title.trim(),
       instructor: draft.instructor.trim(),
       location: draft.location.trim(),
@@ -220,6 +228,7 @@ export function EventEditor({
       await onReload()
       setEditingId(null)
       setDraft(createEmptyDraft())
+      setEndTimeManuallyEdited(false)
       setErrors({})
     } catch (saveError) {
       setOperationError(
@@ -406,10 +415,10 @@ export function EventEditor({
                 aria-label="結束時間"
                 type="time"
                 value={draft.endTime}
-                readOnly
-                className="calculated-time-input"
+                onChange={(event) => updateEndTime(event.target.value)}
+                aria-invalid={Boolean(errors.endTime)}
               />
-              <small className="field-hint">依開始時間自動計算（＋1 小時 30 分鐘）</small>
+              {errors.endTime && <small className="field-error">{errors.endTime}</small>}
             </label>
 
             <label>
