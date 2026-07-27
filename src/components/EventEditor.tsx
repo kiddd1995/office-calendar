@@ -27,14 +27,31 @@ import type { CalendarEvent, EventCategory } from '../types/calendar'
 type EventDraft = Omit<CalendarEvent, 'id' | 'shortTitle'>
 type FormErrors = Partial<Record<keyof EventDraft, string>>
 
+const LOCATION_OPTIONS = ['TP767', '內湖磐石', '自行輸入'] as const
+
+function calculateEndTime(startTime: string) {
+  const match = /^(\d{2}):(\d{2})$/.exec(startTime)
+  if (!match) return ''
+
+  const hours = Number(match[1])
+  const minutes = Number(match[2])
+  if (hours > 23 || minutes > 59) return ''
+
+  const endMinutes = (hours * 60 + minutes + 90) % (24 * 60)
+  const endHours = Math.floor(endMinutes / 60)
+  const remainingMinutes = endMinutes % 60
+
+  return `${String(endHours).padStart(2, '0')}:${String(remainingMinutes).padStart(2, '0')}`
+}
+
 const createEmptyDraft = (): EventDraft => ({
   category: 'daily-training',
   title: '',
   date: format(new Date(), 'yyyy-MM-dd'),
-  startTime: '09:00',
-  endTime: '10:00',
+  startTime: '08:30',
+  endTime: calculateEndTime('08:30'),
   instructor: '',
-  location: '',
+  location: 'TP767',
   description: '',
   notes: '',
   registrationUrl: '',
@@ -46,7 +63,10 @@ const createEmptyDraft = (): EventDraft => ({
 
 function toDraft(event: CalendarEvent): EventDraft {
   const { id: _id, shortTitle: _shortTitle, ...draft } = event
-  return draft
+  return {
+    ...draft,
+    endTime: calculateEndTime(draft.startTime),
+  }
 }
 
 function isValidUrl(value: string) {
@@ -113,6 +133,21 @@ export function EventEditor({
     setOperationError('')
   }
 
+  const updateStartTime = (startTime: string) => {
+    setDraft((current) => ({
+      ...current,
+      startTime,
+      endTime: calculateEndTime(startTime),
+    }))
+    setErrors((current) => ({
+      ...current,
+      startTime: undefined,
+      endTime: undefined,
+    }))
+    setMessage('')
+    setOperationError('')
+  }
+
   const startNew = () => {
     setEditingId(null)
     setDraft(createEmptyDraft())
@@ -144,10 +179,6 @@ export function EventEditor({
     if (!draft.title.trim()) nextErrors.title = '請輸入活動名稱'
     if (!draft.date) nextErrors.date = '請選擇日期'
     if (!draft.startTime) nextErrors.startTime = '請選擇開始時間'
-    if (!draft.endTime) nextErrors.endTime = '請選擇結束時間'
-    if (draft.startTime && draft.endTime && draft.endTime <= draft.startTime) {
-      nextErrors.endTime = '結束時間必須晚於開始時間'
-    }
     if (!draft.instructor.trim()) nextErrors.instructor = '請輸入講師'
     if (!draft.location.trim()) nextErrors.location = '請輸入地點'
     if (!isValidUrl(draft.registrationUrl ?? '')) {
@@ -166,6 +197,7 @@ export function EventEditor({
 
     const normalized: EventDraft = {
       ...draft,
+      endTime: calculateEndTime(draft.startTime),
       title: draft.title.trim(),
       instructor: draft.instructor.trim(),
       location: draft.location.trim(),
@@ -362,7 +394,7 @@ export function EventEditor({
                 aria-label="開始時間"
                 type="time"
                 value={draft.startTime}
-                onChange={(event) => updateDraft('startTime', event.target.value)}
+                onChange={(event) => updateStartTime(event.target.value)}
                 aria-invalid={Boolean(errors.startTime)}
               />
               {errors.startTime && <small className="field-error">{errors.startTime}</small>}
@@ -374,10 +406,10 @@ export function EventEditor({
                 aria-label="結束時間"
                 type="time"
                 value={draft.endTime}
-                onChange={(event) => updateDraft('endTime', event.target.value)}
-                aria-invalid={Boolean(errors.endTime)}
+                readOnly
+                className="calculated-time-input"
               />
-              {errors.endTime && <small className="field-error">{errors.endTime}</small>}
+              <small className="field-hint">依開始時間自動計算（＋1 小時 30 分鐘）</small>
             </label>
 
             <label>
@@ -395,10 +427,22 @@ export function EventEditor({
               <span>地點 *</span>
               <input
                 aria-label="地點"
+                list="event-location-options"
+                placeholder="選擇或輸入地點"
                 value={draft.location}
-                onChange={(event) => updateDraft('location', event.target.value)}
+                onChange={(event) =>
+                  updateDraft(
+                    'location',
+                    event.target.value === '自行輸入' ? '' : event.target.value,
+                  )
+                }
                 aria-invalid={Boolean(errors.location)}
               />
+              <datalist id="event-location-options">
+                {LOCATION_OPTIONS.map((location) => (
+                  <option key={location} value={location} />
+                ))}
+              </datalist>
               {errors.location && <small className="field-error">{errors.location}</small>}
             </label>
 
