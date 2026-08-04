@@ -1,9 +1,12 @@
 import { useMemo, useRef, useState } from 'react'
-import { format, parseISO } from 'date-fns'
+import { addMonths, format, parseISO } from 'date-fns'
 import { zhTW } from 'date-fns/locale'
 import {
   CalendarPlus,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
   DatabaseBackup,
   Edit3,
   Eye,
@@ -13,6 +16,8 @@ import {
   Save,
   Sparkles,
   Trash2,
+  UserRound,
+  MapPin,
   X,
 } from 'lucide-react'
 import {
@@ -22,12 +27,41 @@ import {
 } from '../config/eventCategories'
 import { calendarEventService } from '../services/calendarEventService'
 import { eventStorage } from '../services/eventStorage'
-import type { CalendarEvent, EventCategory } from '../types/calendar'
+import type {
+  CalendarEvent,
+  CalendarEventInstance,
+  EventCategory,
+  RecurrenceType,
+} from '../types/calendar'
+import {
+  generateEventInstancesForMonth,
+  getRecurrenceLabel,
+} from '../utils/recurrence'
+import { MonthCalendar } from './MonthCalendar'
 
 type EventDraft = Omit<CalendarEvent, 'id' | 'shortTitle'>
 type FormErrors = Partial<Record<keyof EventDraft, string>>
 
 const LOCATION_OPTIONS = ['TP767', '內湖磐石', '自行輸入'] as const
+
+const RECURRENCE_OPTIONS: Array<{ value: RecurrenceType; label: string }> = [
+  { value: 'none', label: '不循環' },
+  { value: 'weekly', label: '每週' },
+  { value: 'monthly', label: '每月' },
+  { value: 'yearly', label: '每年' },
+]
+
+const RECURRENCE_INTERVALS: Record<Exclude<RecurrenceType, 'none'>, number[]> = {
+  weekly: [1, 2, 3, 4],
+  monthly: [1, 2, 3],
+  yearly: [1, 2],
+}
+
+function recurrenceIntervalUnit(type: RecurrenceType) {
+  if (type === 'weekly') return '週'
+  if (type === 'monthly') return '個月'
+  return '年'
+}
 
 function calculateEndTime(startTime: string) {
   const match = /^(\d{2}):(\d{2})$/.exec(startTime)
@@ -44,10 +78,10 @@ function calculateEndTime(startTime: string) {
   return `${String(endHours).padStart(2, '0')}:${String(remainingMinutes).padStart(2, '0')}`
 }
 
-const createEmptyDraft = (): EventDraft => ({
+const createEmptyDraft = (date = format(new Date(), 'yyyy-MM-dd')): EventDraft => ({
   category: 'daily-training',
   title: '',
-  date: format(new Date(), 'yyyy-MM-dd'),
+  date,
   startTime: '08:30',
   endTime: calculateEndTime('08:30'),
   instructor: '',
@@ -59,6 +93,9 @@ const createEmptyDraft = (): EventDraft => ({
   featured: false,
   visible: true,
   showInWeeklyHighlights: false,
+  recurrenceType: 'none',
+  recurrenceInterval: 1,
+  recurrenceEndDate: null,
 })
 
 function toDraft(event: CalendarEvent): EventDraft {
@@ -99,6 +136,8 @@ export function EventEditor({
   error,
   onReload,
 }: EventEditorProps) {
+  const [month, setMonth] = useState(() => new Date())
+  const [selectedDate, setSelectedDate] = useState(() => new Date())
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draft, setDraft] = useState<EventDraft>(createEmptyDraft)
   const [endTimeManuallyEdited, setEndTimeManuallyEdited] = useState(false)
@@ -113,13 +152,23 @@ export function EventEditor({
   const formRef = useRef<HTMLDivElement>(null)
   const categoryDetailsRef = useRef<HTMLDetailsElement>(null)
 
-  const sortedEvents = useMemo(
-    () =>
-      [...events].sort((a, b) =>
-        `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`),
-      ),
-    [events],
+  const selectedDateKey = format(selectedDate, 'yyyy-MM-dd')
+
+  const monthEvents = useMemo(
+    () => generateEventInstancesForMonth(events, month),
+    [events, month],
   )
+
+  const eventsByDate = useMemo(
+    () =>
+      monthEvents.reduce<Record<string, CalendarEventInstance[]>>((result, event) => {
+        result[event.date] = [...(result[event.date] ?? []), event]
+        return result
+      }, {}),
+    [monthEvents],
+  )
+
+  const selectedEvents = eventsByDate[selectedDateKey] ?? []
 
   const updateDraft = <Key extends keyof EventDraft>(
     key: Key,
@@ -153,9 +202,27 @@ export function EventEditor({
     updateDraft('endTime', endTime)
   }
 
+  const updateRecurrenceType = (recurrenceType: RecurrenceType) => {
+    setDraft((current) => ({
+      ...current,
+      recurrenceType,
+      recurrenceInterval: 1,
+      recurrenceEndDate:
+        recurrenceType === 'none' ? null : current.recurrenceEndDate,
+    }))
+    setErrors((current) => ({
+      ...current,
+      recurrenceType: undefined,
+      recurrenceInterval: undefined,
+      recurrenceEndDate: undefined,
+    }))
+    setMessage('')
+    setOperationError('')
+  }
+
   const startNew = () => {
     setEditingId(null)
-    setDraft(createEmptyDraft())
+    setDraft(createEmptyDraft(selectedDateKey))
     setEndTimeManuallyEdited(false)
     setErrors({})
     setMessage('')
@@ -163,9 +230,14 @@ export function EventEditor({
     formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
-  const startEdit = (event: CalendarEvent) => {
-    setEditingId(event.id)
-    setDraft(toDraft(event))
+  const startEdit = (eventOrInstance: CalendarEvent) => {
+    const originalEvent = events.find((event) => event.id === eventOrInstance.id)
+    if (!originalEvent) return
+    const occurrenceDate = parseISO(eventOrInstance.date)
+    setMonth(occurrenceDate)
+    setSelectedDate(occurrenceDate)
+    setEditingId(originalEvent.id)
+    setDraft(toDraft(originalEvent))
     setEndTimeManuallyEdited(false)
     setErrors({})
     setMessage('')
@@ -175,9 +247,27 @@ export function EventEditor({
 
   const cancel = () => {
     setEditingId(null)
-    setDraft(createEmptyDraft())
+    setDraft(createEmptyDraft(selectedDateKey))
     setEndTimeManuallyEdited(false)
     setErrors({})
+    setMessage('')
+    setOperationError('')
+  }
+
+  const moveMonth = (amount: number) => {
+    const nextMonth = addMonths(month, amount)
+    setMonth(nextMonth)
+    setSelectedDate(nextMonth)
+  }
+
+  const goToday = () => {
+    const today = new Date()
+    setMonth(today)
+    setSelectedDate(today)
+  }
+
+  const selectDate = (date: Date) => {
+    setSelectedDate(date)
     setMessage('')
     setOperationError('')
   }
@@ -190,6 +280,21 @@ export function EventEditor({
     if (!draft.endTime) nextErrors.endTime = '請選擇結束時間'
     if (!draft.instructor.trim()) nextErrors.instructor = '請輸入講師'
     if (!draft.location.trim()) nextErrors.location = '請輸入地點'
+    if (
+      draft.recurrenceType !== 'none' &&
+      !RECURRENCE_INTERVALS[draft.recurrenceType].includes(
+        draft.recurrenceInterval,
+      )
+    ) {
+      nextErrors.recurrenceInterval = '請選擇有效的循環間隔'
+    }
+    if (
+      draft.recurrenceType !== 'none' &&
+      draft.recurrenceEndDate &&
+      draft.recurrenceEndDate < draft.date
+    ) {
+      nextErrors.recurrenceEndDate = '循環結束日期不可早於活動日期'
+    }
     if (!isValidUrl(draft.registrationUrl ?? '')) {
       nextErrors.registrationUrl = '請輸入有效的 http(s) 網址'
     }
@@ -227,7 +332,7 @@ export function EventEditor({
       }
       await onReload()
       setEditingId(null)
-      setDraft(createEmptyDraft())
+      setDraft(createEmptyDraft(selectedDateKey))
       setEndTimeManuallyEdited(false)
       setErrors({})
     } catch (saveError) {
@@ -241,13 +346,19 @@ export function EventEditor({
 
   const remove = async (event: CalendarEvent) => {
     if (deletingId || saving || importing) return
-    if (!window.confirm(`確定要刪除「${event.title}」嗎？此動作無法復原。`)) return
+    const confirmMessage = event.recurrenceType === 'none'
+      ? `確定要刪除「${event.title}」嗎？此動作無法復原。`
+      : `此操作會刪除整個循環活動，確定要繼續嗎？\n\n${event.title}`
+    if (!window.confirm(confirmMessage)) return
     setDeletingId(event.id)
     setOperationError('')
     try {
       await calendarEventService.deleteEvent(event.id)
       await onReload()
-      if (editingId === event.id) cancel()
+      setEditingId(null)
+      setDraft(createEmptyDraft(selectedDateKey))
+      setEndTimeManuallyEdited(false)
+      setErrors({})
       setMessage('活動已刪除')
     } catch (deleteError) {
       setOperationError(
@@ -299,8 +410,8 @@ export function EventEditor({
           <h2>活動管理</h2>
           <p>活動直接儲存至 Supabase，完成後會同步更新一般檢視。</p>
         </div>
-        <div className="editor-toolbar-actions">
-          {hasLegacyStorage && (
+        {hasLegacyStorage && (
+          <div className="editor-toolbar-actions">
             <button
               type="button"
               className="restore-button"
@@ -309,16 +420,8 @@ export function EventEditor({
             >
               <DatabaseBackup size={16} />{importing ? '匯入中…' : '匯入舊資料'}
             </button>
-          )}
-          <button
-            type="button"
-            className="primary-button"
-            onClick={startNew}
-            disabled={saving || importing || Boolean(deletingId)}
-          >
-            <Plus size={17} />新增活動
-          </button>
-        </div>
+          </div>
+        )}
       </section>
 
       {message && (
@@ -330,12 +433,205 @@ export function EventEditor({
         <div className="operation-error" role="alert">{operationError}</div>
       )}
 
+      <section className="calendar-card editor-calendar-card">
+        <div className="calendar-toolbar editor-calendar-toolbar">
+          <div>
+            <span className="eyebrow">COURSE CALENDAR</span>
+            <h2>{format(month, 'yyyy 年 M 月', { locale: zhTW })}</h2>
+          </div>
+          <div className="toolbar-actions editor-calendar-actions">
+            <button
+              type="button"
+              className="primary-button"
+              onClick={startNew}
+              disabled={saving || importing || Boolean(deletingId)}
+            >
+              <Plus size={17} />新增活動
+            </button>
+            <button type="button" className="today-button" onClick={goToday}>今天</button>
+            <button type="button" className="icon-button" onClick={() => moveMonth(-1)} aria-label="上一個月"><ChevronLeft /></button>
+            <button type="button" className="icon-button" onClick={() => moveMonth(1)} aria-label="下一個月"><ChevronRight /></button>
+          </div>
+        </div>
+
+        <div className="legend editor-calendar-legend">
+          {eventCategories.map((category) => (
+            <span key={category.key}>
+              <i
+                style={{
+                  backgroundColor: category.borderColor,
+                  borderColor: category.borderColor,
+                }}
+              />
+              {category.label}
+            </span>
+          ))}
+          <span><i className="hidden-event-legend" />隱藏活動</span>
+          <span><Sparkles size={13} />本週重點</span>
+        </div>
+
+        {error && (
+          <div className="inline-load-error" role="alert">
+            <span>{error}</span>
+            <button type="button" onClick={onReload} disabled={loading}>
+              <RefreshCw size={15} />重新載入
+            </button>
+          </div>
+        )}
+
+        <MonthCalendar
+          month={month}
+          selectedDate={selectedDate}
+          onSelectDate={selectDate}
+          renderDay={(date) =>
+            (eventsByDate[format(date, 'yyyy-MM-dd')] ?? []).map((event) => (
+              <span
+                className={[
+                  'event-pill',
+                  'event-category-surface',
+                  'editor-calendar-event',
+                  event.visible ? '' : 'is-hidden',
+                  editingId === event.id ? 'is-selected' : '',
+                ].join(' ')}
+                style={eventCategoryStyle(event.category)}
+                key={event.id}
+                role="button"
+                tabIndex={0}
+                aria-label={`${event.title}，${event.startTime} 到 ${event.endTime}${event.visible ? '' : '，已隱藏'}${event.showInWeeklyHighlights ? '，本週重點' : ''}${event.recurrenceType === 'none' ? '' : `，${getRecurrenceLabel(event.recurrenceType)}`}`}
+                aria-pressed={editingId === event.id}
+                onClick={(clickEvent) => {
+                  clickEvent.stopPropagation()
+                  startEdit(event)
+                }}
+                onKeyDown={(keyEvent) => {
+                  if (keyEvent.key !== 'Enter' && keyEvent.key !== ' ') return
+                  keyEvent.preventDefault()
+                  keyEvent.stopPropagation()
+                  startEdit(event)
+                }}
+              >
+                <span className="editor-pill-title">{event.shortTitle}</span>
+                {(!event.visible || event.showInWeeklyHighlights || event.recurrenceType !== 'none') && (
+                  <span className="editor-pill-flags">
+                    {!event.visible && <span>隱藏</span>}
+                    {event.showInWeeklyHighlights && <span>重點</span>}
+                    {event.recurrenceType !== 'none' && (
+                      <span>{getRecurrenceLabel(event.recurrenceType)}</span>
+                    )}
+                  </span>
+                )}
+              </span>
+            ))
+          }
+          getDayLabel={(date) => {
+            const dayEvents = eventsByDate[format(date, 'yyyy-MM-dd')] ?? []
+            return `${format(date, 'M 月 d 日 EEEE', { locale: zhTW })}${dayEvents.length ? `，${dayEvents.length} 個活動` : ''}`
+          }}
+        />
+      </section>
+
+      <section className="event-list-card selected-date-events-card">
+        <div className="section-heading selected-date-heading">
+          <div>
+            <span className="eyebrow">SELECTED DATE</span>
+            <h2>{format(selectedDate, 'M 月 d 日 EEEE', { locale: zhTW })}</h2>
+          </div>
+          <span className="record-count">{selectedEvents.length} 筆活動</span>
+        </div>
+
+        <div className={`editor-date-event-list ${loading ? 'is-loading' : ''}`}>
+          {selectedEvents.map((event) => (
+            <article
+              className={[
+                'editor-date-event-item',
+                event.visible ? '' : 'is-hidden',
+                editingId === event.id ? 'is-selected' : '',
+              ].join(' ')}
+              key={event.occurrenceKey}
+            >
+              <button
+                type="button"
+                className="editor-date-event-select"
+                onClick={() => startEdit(event)}
+                disabled={saving || importing || Boolean(deletingId)}
+                aria-pressed={editingId === event.id}
+              >
+                <span className="editor-date-event-topline">
+                  <span
+                    className="category-badge event-category-surface"
+                    style={eventCategoryStyle(event.category)}
+                  >
+                    {eventCategoryByKey[event.category].label}
+                  </span>
+                  {event.visible
+                    ? <span className="visible-badge"><Eye size={13} />顯示中</span>
+                    : <span className="hidden-badge"><EyeOff size={13} />已隱藏</span>}
+                  {event.showInWeeklyHighlights
+                    ? <span className="highlight-badge"><Sparkles size={13} />本週重點</span>
+                    : <span className="standard-badge">非本週重點</span>}
+                  {event.recurrenceType !== 'none' && (
+                    <span className="recurrence-badge">
+                      {getRecurrenceLabel(event.recurrenceType)}
+                    </span>
+                  )}
+                </span>
+                <strong className="editor-date-event-title">{event.title}</strong>
+                <span className="editor-date-event-meta">
+                  <span><Clock3 size={16} />{event.startTime}–{event.endTime}</span>
+                  <span><UserRound size={16} />{event.instructor}</span>
+                  <span><MapPin size={16} />{event.location}</span>
+                </span>
+              </button>
+              <div className="list-actions">
+                <button
+                  type="button"
+                  onClick={() => startEdit(event)}
+                  disabled={saving || importing || Boolean(deletingId)}
+                  aria-label={`編輯 ${event.title}`}
+                >
+                  <Edit3 size={16} />編輯
+                </button>
+                <button
+                  type="button"
+                  className="danger"
+                  onClick={() => remove(event)}
+                  disabled={saving || importing || Boolean(deletingId)}
+                  aria-label={`刪除 ${event.title}`}
+                >
+                  <Trash2 size={16} />{deletingId === event.id ? '刪除中…' : '刪除'}
+                </button>
+              </div>
+            </article>
+          ))}
+
+          {!loading && !selectedEvents.length && !error && (
+            <div className="empty-state selected-date-empty">
+              <Eye size={28} />
+              <strong>這一天尚無活動</strong>
+              <p>可選擇其他日期，或直接建立這一天的新活動。</p>
+              <button
+                type="button"
+                className="primary-button"
+                onClick={startNew}
+                disabled={saving || importing || Boolean(deletingId)}
+              >
+                <Plus size={17} />新增活動
+              </button>
+            </div>
+          )}
+          {loading && (
+            <div className="empty-state"><RefreshCw className="spin" size={28} /><strong>正在載入活動</strong></div>
+          )}
+        </div>
+      </section>
+
       <section className="editor-form-card" ref={formRef}>
         <div className="editor-card-heading">
           <span className="editor-heading-icon"><CalendarPlus size={20} /></span>
           <div>
             <span className="eyebrow">{editingId ? 'EDIT EVENT' : 'NEW EVENT'}</span>
             <h2>{editingId ? '修改活動' : '新增活動'}</h2>
+            {editingId && <p className="editing-event-name">目前正在編輯：{draft.title}</p>}
           </div>
         </div>
 
@@ -396,6 +692,63 @@ export function EventEditor({
               />
               {errors.date && <small className="field-error">{errors.date}</small>}
             </label>
+
+            <label>
+              <span>循環方式</span>
+              <select
+                aria-label="循環方式"
+                value={draft.recurrenceType}
+                onChange={(event) =>
+                  updateRecurrenceType(event.target.value as RecurrenceType)
+                }
+              >
+                {RECURRENCE_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
+              </select>
+            </label>
+
+            {draft.recurrenceType !== 'none' && (
+              <>
+                <label>
+                  <span>每隔多久</span>
+                  <select
+                    aria-label="循環間隔"
+                    value={draft.recurrenceInterval}
+                    onChange={(event) =>
+                      updateDraft('recurrenceInterval', Number(event.target.value))
+                    }
+                  >
+                    {RECURRENCE_INTERVALS[draft.recurrenceType].map((interval) => (
+                      <option key={interval} value={interval}>
+                        {interval} {recurrenceIntervalUnit(draft.recurrenceType)}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.recurrenceInterval && (
+                    <small className="field-error">{errors.recurrenceInterval}</small>
+                  )}
+                </label>
+
+                <label>
+                  <span>循環結束日期</span>
+                  <input
+                    aria-label="循環結束日期"
+                    type="date"
+                    min={draft.date || undefined}
+                    value={draft.recurrenceEndDate ?? ''}
+                    onChange={(event) =>
+                      updateDraft('recurrenceEndDate', event.target.value || null)
+                    }
+                    aria-invalid={Boolean(errors.recurrenceEndDate)}
+                  />
+                  <small className="field-hint">留空代表持續循環</small>
+                  {errors.recurrenceEndDate && (
+                    <small className="field-error">{errors.recurrenceEndDate}</small>
+                  )}
+                </label>
+              </>
+            )}
 
             <label>
               <span>開始時間 *</span>
@@ -541,79 +894,6 @@ export function EventEditor({
         </form>
       </section>
 
-      <section className="event-list-card">
-        <div className="section-heading">
-          <div>
-            <span className="eyebrow">ALL EVENTS</span>
-            <h2>活動列表</h2>
-          </div>
-          <span className="record-count">共 {events.length} 筆</span>
-        </div>
-
-        {error && (
-          <div className="inline-load-error" role="alert">
-            <span>{error}</span>
-            <button type="button" onClick={onReload} disabled={loading}>
-              <RefreshCw size={15} />重新載入
-            </button>
-          </div>
-        )}
-
-        <div className={`editor-event-list ${loading ? 'is-loading' : ''}`}>
-          {sortedEvents.map((event) => (
-            <article className={`editor-event-item ${event.visible ? '' : 'is-hidden'}`} key={event.id}>
-              <span
-                className="editor-event-date event-category-surface"
-                style={eventCategoryStyle(event.category)}
-              >
-                <strong>{format(parseISO(event.date), 'd')}</strong>
-                {format(parseISO(event.date), 'M 月', { locale: zhTW })}
-              </span>
-              <div className="editor-event-copy">
-                <div>
-                  <span
-                    className="category-badge event-category-surface"
-                    style={eventCategoryStyle(event.category)}
-                  >
-                    {eventCategoryByKey[event.category].label}
-                  </span>
-                  {!event.visible && <span className="hidden-badge"><EyeOff size={12} />已隱藏</span>}
-                  {event.showInWeeklyHighlights && (
-                    <span className="highlight-badge"><Sparkles size={12} />本週重點</span>
-                  )}
-                </div>
-                <h3>{event.title}</h3>
-                <p>{event.date} · {event.startTime}–{event.endTime} · {event.instructor} · {event.location}</p>
-              </div>
-              <div className="list-actions">
-                <button
-                  type="button"
-                  onClick={() => startEdit(event)}
-                  disabled={saving || importing || Boolean(deletingId)}
-                  aria-label={`編輯 ${event.title}`}
-                >
-                  <Edit3 size={16} />編輯
-                </button>
-                <button
-                  type="button"
-                  className="danger"
-                  onClick={() => remove(event)}
-                  disabled={saving || importing || Boolean(deletingId)}
-                  aria-label={`刪除 ${event.title}`}
-                >
-                  <Trash2 size={16} />{deletingId === event.id ? '刪除中…' : '刪除'}
-                </button>
-              </div>
-            </article>
-          ))}
-          {!loading && !events.length && !error && (
-            <div className="empty-state"><Eye size={28} /><strong>目前沒有活動</strong><p>按下「新增活動」建立第一筆資料。</p></div>
-          )}
-          {loading && (
-            <div className="empty-state"><RefreshCw className="spin" size={28} /><strong>正在載入活動</strong></div>
-          )}
-        </div>
-      </section>
     </div>
   )
 }

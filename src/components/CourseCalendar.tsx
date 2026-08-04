@@ -31,6 +31,7 @@ import {
 } from '../utils/eventFilters'
 import { HolidayNotice } from './HolidayNotice'
 import { MonthCalendar } from './MonthCalendar'
+import { generateEventInstancesForMonth } from '../utils/recurrence'
 
 interface CourseCalendarProps {
   events: CalendarEvent[]
@@ -41,7 +42,11 @@ export function CourseCalendar({ events }: CourseCalendarProps) {
   const [selectedDate, setSelectedDate] = useState(() => new Date())
 
   const visibleEvents = useMemo(() => getPublicEvents(events), [events])
-  const selectedEvents = visibleEvents.filter((event) =>
+  const monthEvents = useMemo(
+    () => generateEventInstancesForMonth(visibleEvents, month),
+    [month, visibleEvents],
+  )
+  const selectedEvents = monthEvents.filter((event) =>
     isSameDay(parseISO(event.date), selectedDate),
   )
   const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 })
@@ -54,11 +59,11 @@ export function CourseCalendar({ events }: CourseCalendarProps) {
 
   const eventsByDate = useMemo(
     () =>
-      visibleEvents.reduce<Record<string, CalendarEvent[]>>((result, event) => {
+      monthEvents.reduce<Record<string, typeof monthEvents>>((result, event) => {
         result[event.date] = [...(result[event.date] ?? []), event]
         return result
       }, {}),
-    [visibleEvents],
+    [monthEvents],
   )
 
   const moveMonth = (amount: number) => {
@@ -88,7 +93,7 @@ export function CourseCalendar({ events }: CourseCalendarProps) {
             <button
               className="weekly-item"
               type="button"
-              key={event.id}
+              key={event.occurrenceKey}
               onClick={() => {
                 const date = parseISO(event.date)
                 setSelectedDate(date)
@@ -149,7 +154,7 @@ export function CourseCalendar({ events }: CourseCalendarProps) {
               <span
                 className="event-pill event-category-surface"
                 style={eventCategoryStyle(event.category)}
-                key={event.id}
+                key={event.occurrenceKey}
               >
                 {event.shortTitle}
               </span>
@@ -177,7 +182,7 @@ export function CourseCalendar({ events }: CourseCalendarProps) {
             {selectedEvents.map((event) => {
               const meta = eventCategoryByKey[event.category]
               return (
-                <article className="event-detail-card" key={event.id}>
+                <article className="event-detail-card" key={event.occurrenceKey}>
                   <div
                     className="event-accent event-category-accent"
                     style={eventCategoryStyle(event.category)}

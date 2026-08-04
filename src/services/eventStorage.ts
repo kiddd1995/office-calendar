@@ -36,6 +36,9 @@ function normalizeEvent(event: Partial<CalendarEvent>): CalendarEvent | null {
     showInWeeklyHighlights:
       event.showInWeeklyHighlights === true ||
       legacyEvent.show_in_weekly_highlights === true,
+    recurrenceType: 'none',
+    recurrenceInterval: 1,
+    recurrenceEndDate: null,
   }
 }
 

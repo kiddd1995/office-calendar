@@ -1,5 +1,6 @@
 import { parseISO } from 'date-fns'
 import type { CalendarEvent } from '../types/calendar'
+import { generateEventInstancesForRange } from './recurrence'
 
 export function getPublicEvents(events: CalendarEvent[]) {
   return events.filter((event) => event.visible)
@@ -10,7 +11,11 @@ export function getWeeklyHighlightEvents(
   weekStart: Date,
   weekEnd: Date,
 ) {
-  return getPublicEvents(events)
+  return generateEventInstancesForRange(
+    getPublicEvents(events),
+    weekStart,
+    weekEnd,
+  )
     .filter((event) => {
       const date = parseISO(event.date)
       return (

@@ -3,7 +3,7 @@ import {
   normalizeEventCategory,
 } from '../config/eventCategories'
 import { getSupabaseClient } from '../lib/supabaseClient'
-import type { CalendarEvent } from '../types/calendar'
+import type { CalendarEvent, RecurrenceType } from '../types/calendar'
 
 export type CalendarEventInput = Omit<CalendarEvent, 'id' | 'shortTitle'>
 
@@ -24,6 +24,9 @@ interface CalendarEventRow {
   display_color: string | null
   is_visible: boolean
   show_in_weekly_highlights: boolean | null
+  recurrence_type: string | null
+  recurrence_interval: number | null
+  recurrence_end_date: string | null
   updated_at: string | null
 }
 
@@ -44,8 +47,17 @@ const EVENT_COLUMNS = [
   'display_color',
   'is_visible',
   'show_in_weekly_highlights',
+  'recurrence_type',
+  'recurrence_interval',
+  'recurrence_end_date',
   'updated_at',
 ].join(',')
+
+function normalizeRecurrenceType(value: string | null): RecurrenceType {
+  return value === 'weekly' || value === 'monthly' || value === 'yearly'
+    ? value
+    : 'none'
+}
 
 function toCalendarEvent(row: CalendarEventRow): CalendarEvent {
   const category = normalizeEventCategory(row.category, row.display_color)
@@ -68,6 +80,12 @@ function toCalendarEvent(row: CalendarEventRow): CalendarEvent {
     attachmentUrl: row.attachment_url ?? '',
     visible: row.is_visible,
     showInWeeklyHighlights: row.show_in_weekly_highlights === true,
+    recurrenceType: normalizeRecurrenceType(row.recurrence_type),
+    recurrenceInterval:
+      Number.isInteger(row.recurrence_interval) && Number(row.recurrence_interval) > 0
+        ? Number(row.recurrence_interval)
+        : 1,
+    recurrenceEndDate: row.recurrence_end_date || null,
   }
 }
 
@@ -87,6 +105,9 @@ function toCalendarEventRow(event: CalendarEventInput) {
     display_color: eventCategoryByKey[event.category].borderColor,
     is_visible: event.visible,
     show_in_weekly_highlights: event.showInWeeklyHighlights === true,
+    recurrence_type: event.recurrenceType,
+    recurrence_interval: event.recurrenceInterval,
+    recurrence_end_date: event.recurrenceEndDate || null,
     updated_at: new Date().toISOString(),
   }
 }

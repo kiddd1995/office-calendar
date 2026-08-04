@@ -7,6 +7,8 @@ export type EventCategory =
   | 'unit-event'
   | 'other'
 
+export type RecurrenceType = 'none' | 'weekly' | 'monthly' | 'yearly'
+
 export interface CalendarEvent {
   id: string
   title: string
@@ -24,6 +26,14 @@ export interface CalendarEvent {
   featured?: boolean
   visible: boolean
   showInWeeklyHighlights: boolean
+  recurrenceType: RecurrenceType
+  recurrenceInterval: number
+  recurrenceEndDate: string | null
+}
+
+export interface CalendarEventInstance extends CalendarEvent {
+  occurrenceKey: string
+  sourceDate: string
 }
 
 export interface Company {
